@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<!--
+  <?APP_NAME?> · Account Admin Tool
+  Author/operator only. Input username + plaintext password → generate accounts.json hashes.
+  Pure-frontend SHA-256; auto-fetch accounts.json via x-account-url, with manual-paste fallback.
+
+  ──────────────────────────────
+  Replacement rules (when deploying to a new project):
+    <?APP_NAME?>           → your product's display name (e.g. "WhiteBoard Pro")
+    <?APP_KEY?>            → short key (e.g. "whiteboard" — used in LS keys / BC channel name)
+    <?APP_DOMAIN_HINT?>    → main app's domain (used for the "open main app" link)
+    <?SALT?>               → custom salt string, length ≥ 16 (must match accounts.json's salt field)
+    <?DEFAULT_PRICE?>      → price string (e.g. "$5", "¥29.9")
+    <?OWNER_WECHAT?>       → owner's contact handle (e.g. "yourname2026")
+    <?OWNER_ROLE?>         → description of the admin (e.g. "Author", "Owner")
+    <?FAVICON?>            → favicon URL or data URL (optional)
+    <?READMETAIL_NOTE?>    → deploy path note for accounts.json (differs per host)
+    <?INDEX_LINK?>         → URL for the "open main app" link
+    <?ACCOUNT_SCHEMA_NOTE?>→ optional note about membership schema fields
+    <?OG_META?>            → og:title / og:description tags (optional, for social sharing)
+
+  Verify after replacement: grep -nE '<\?[A-Z_]+\?>' <file> should show 0 entries.
+  ──────────────────────────────
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Prefer <?APP_DOMAIN_HINT?>; for local dev, swap to http://127.0.0.1:8000/accounts.json or leave empty -->
+<meta name="x-account-url" content="https://<?APP_DOMAIN_HINT?>/accounts.json">
+<meta name="x-<?APP_KEY?>-price" content="<?DEFAULT_PRICE?>">
+<meta name="x-<?APP_KEY?>-wx" content="<?OWNER_WECHAT?>">
+<title>Account Admin · <?APP_NAME?></title>
+<?FAVICON?>
+<?OG_META?>
+<style>
+:root{
+  --ink:#1c1c1e;--ink2:#5c5c6e;--ink3:#9a9aaa;
+  --paper:#f7f5f0;--paper2:#efece4;--paper3:#e8e5dc;
+  --teal:#2d5a6b;--teal-l:#e4ecef;
+  --border:#d8d4c8;--border2:#c8c2b2;
+  --cinnabar:#b23a2e;--cinnabar-l:#f7e8e4;
+  --shadow:0 2px 12px rgba(28,28,30,.08);
+  --r:10px;
+  --sans:-apple-system,"PingFang SC","Hiragino Sans GB","Segoe UI",Roboto,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--sans);background:var(--paper);color:var(--ink);line-height:1.7;padding:24px 18px;max-width:980px;margin:0 auto}
+h1{font-size:26px;font-weight:700;letter-spacing:.02em;margin-bottom:6px}
+.sub{color:var(--ink2);font-size:13px;margin-bottom:24px}
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--border);margin-bottom:20px;flex-wrap:wrap}
+.tab{padding:10px 18px;border:none;background:transparent;font:inherit;color:var(--ink2);cursor:pointer;border-bottom:2px solid transparent;transition:.18s}
+.tab.on{color:var(--teal);border-bottom-color:var(--teal);font-weight:600}
+.tab:hover{color:var(--ink)}
+.panel{display:none;animation:fade .25s}
+.panel.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.card{background:var(--paper2);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--shadow)}
+.lab{display:block;font-size:13px;color:var(--ink2);margin-bottom:6px;font-weight:500}
+.lab .hint{color:var(--ink3);font-weight:normal;font-size:11px;margin-left:6px}
+textarea,input[type=text],input[type=password]{
+  font-family:ui-monospace,"SF Mono",Consolas,monospace;font-size:13px;
+  padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;
+  color:var(--ink);outline:none;width:100%;resize:vertical
+}
+textarea:focus,input:focus{border-color:var(--teal)}
+textarea{height:120px;line-height:1.5}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
+@media(max-width:600px){.row{grid-template-columns:1fr}}
+.btn{padding:10px 18px;background:var(--teal);color:#fff;border:none;border-radius:8px;font:inherit;cursor:pointer;font-weight:600;transition:.18s}
+.btn:hover{opacity:.85}
+.btn.ghost{background:transparent;color:var(--ink2);border:1px solid var(--border)}
+.btn.ghost:hover{color:var(--ink);border-color:var(--teal)}
+.btn.cinnabar{background:var(--cinnabar)}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.out{font-family:ui-monospace,"SF Mono",Consolas,monospace;font-size:12px;
+  background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px;
+  white-space:pre-wrap;word-break:break-all;min-height:48px;max-height:300px;overflow:auto;line-height:1.5}
+.out.empty{color:var(--ink3);font-style:italic;font-family:var(--sans)}
+.warn{background:var(--cinnabar-l);border:1px solid var(--cinnabar);color:var(--cinnabar);padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;display:flex;gap:8px;align-items:flex-start}
+.warn b{font-weight:700}
+.foot{margin-top:30px;padding-top:18px;border-top:1px solid var(--border);color:var(--ink3);font-size:12px;line-height:1.6}
+.foot kbd{background:var(--paper3);padding:1px 6px;border-radius:4px;font-family:ui-monospace,monospace;font-size:11px}
+</style>
+</head>
+<body>
+
+<h1>Account Admin · <span style="color:var(--cinnabar)"><?APP_NAME?></span></h1>
+<div class="sub"><?OWNER_ROLE?> only · offline tool · generates SHA-256 hashes for accounts.json</div>
+
+<div class="warn">
+  <span>🔒</span>
+  <div>
+    <b>Important + "zero-trust client" notice:</b>
+    This tool only generates <b>hashes</b> (one-way, irreversible). SHA-256 cannot recover the plaintext password from a hash by design.<br>
+    Send your users the <b>plaintext username + password</b>, not the hash.<br>
+    <b style="color:var(--cinnabar)">Client-side checks can be bypassed:</b> this pattern depends on <code>localStorage.unlocked=true</code>, which anyone with browser dev tools can flip ——
+    This tool implements a <b>soft gate / paywall</b>, <b>not real auth</b> (for real auth, add a Node Functions backend — see SKILL.md §5).
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab on" data-tab="batch">Batch generate</button>
+  <button class="tab" data-tab="auto">🎲 Auto-generate</button>
+  <button class="tab" data-tab="single">Single hash</button>
+  <button class="tab" data-tab="verify">Verify</button>
+  <button class="tab" data-tab="parse">Parse JSON</button>
+</div>
+
+<!-- Batch -->
+<div class="panel on" data-panel="batch">
+  <div class="card">
+    <div class="row">
+      <div>
+        <label class="lab">Salt <span class="hint">Matches main app; becomes accounts.json's salt field</span></label>
+        <input id="b-salt" type="text" value="<?SALT?>">
+      </div>
+      <div>
+        <label class="lab">Schema version <span class="hint">Default 1</span></label>
+        <input id="b-version" type="text" value="1">
+      </div>
+    </div>
+
+    <label class="lab" style="margin-top:14px">Account list <span class="hint">One per line. Format: <code>username:password</code> (colon-separated)</span></label>
+    <textarea id="b-input" placeholder="alice:alice-password
+bob:bob-password
+admin:admin-password"></textarea>
+
+    <div class="btn-row">
+      <button class="btn" id="b-gen">🔨 Generate full accounts.json</button>
+      <button class="btn ghost" id="b-clear">Clear</button>
+    </div>
+
+    <label class="lab" style="margin-top:18px">Output (overwrite to <?APP_DOMAIN_HINT?>/accounts.json)</label>
+    <div class="out empty" id="b-out">Click "Generate" to see the full JSON here...</div>
+    <div class="btn-row">
+      <button class="btn ghost" id="b-copy">📋 Copy JSON</button>
+      <button class="btn ghost" id="b-download">⬇ Download accounts.json</button>
+    </div>
+  </div>
+</div>
+
+<!-- Auto -->
+<div class="panel" data-panel="auto">
+  <div class="card">
+    <div class="warn" style="background:var(--teal-l);border-color:var(--teal);color:var(--teal)">
+      <span>🎲</span>
+      <div>
+        <b>One-click account generation</b> — the tool generates a <b>random password</b> (e.g. <i>river-sunset-42</i>) and a <b>username</b> (e.g. <i>user<?today?>01</i>).
+        Hash is auto-computed; new accounts can be appended to the existing JSON.<br>
+        Workflow: ① set count ② click "Generate" ③ copy JSON to your host ④ DM the plaintext credentials to the customer.
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label class="lab">Count <span class="hint">1–20</span></label>
+        <input id="a-count" type="text" value="3">
+      </div>
+      <div>
+        <label class="lab">Salt</label>
+        <input id="a-salt" type="text" value="<?SALT?>">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" id="a-gen">🎲 Generate accounts</button>
+      <button class="btn ghost" id="a-clear-plain">Clear plaintext list</button>
+    </div>
+
+    <label class="lab" style="margin-top:18px">Plaintext account list (editable)</label>
+    <textarea id="a-plain" placeholder='Click "🎲 Generate accounts" to auto-fill.
+You can also edit by hand: each line "username  password" (2 spaces between).
+Example:
+user202607101  river-thunder
+user202607102  moon-pine'></textarea>
+    <div class="btn-row">
+      <button class="btn ghost" id="a-copy-plain">📋 Copy plaintext</button>
+      <button class="btn ghost" id="a-download-plain">⬇ Download accounts-plaintext.txt</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <label class="lab">📋 Existing accounts.json <span class="hint" id="a-existing-status">Waiting for auto-fetch…</span></label>
+    <textarea id="a-existing" placeholder='{
+  "version": 1,
+  "salt": "<?SALT?>",
+  "accounts": [
+    { "u": "alice", "h": "<64-char-hex>" }
+  ]
+}'></textarea>
+
+    <div class="btn-row">
+      <button class="btn cinnabar" id="a-append">🔗 Append to existing JSON</button>
+      <button class="btn ghost" id="a-load-file">📁 Load from local file</button>
+      <input type="file" id="a-file-input" accept=".json,application/json" style="display:none">
+      <button class="btn ghost" id="a-refresh">🔄 Re-fetch</button>
+    </div>
+
+    <label class="lab" style="margin-top:18px">Output (full JSON after append)</label>
+    <div class="out empty" id="a-json">Generate accounts first, then click "Append"...</div>
+    <div class="btn-row">
+      <button class="btn ghost" id="a-copy-json">📋 Copy JSON</button>
+      <button class="btn ghost" id="a-download-json">⬇ Download accounts.json</button>
+    </div>
+
+    <div style="margin-top:12px;padding:10px 14px;background:var(--paper3);border-left:3px solid var(--teal);border-radius:6px;font-size:12px;color:var(--ink2);line-height:1.6">
+      <b style="color:var(--teal)">⬆ Deploy to your host:</b> <?READMETAIL_NOTE?>
+    </div>
+  </div>
+</div>
+
+<!-- Single -->
+<div class="panel" data-panel="single">
+  <div class="card">
+    <div class="row">
+      <div>
+        <label class="lab">Username</label>
+        <input id="s-user" type="text" placeholder="e.g. alice">
+      </div>
+      <div>
+        <label class="lab">Plaintext password</label>
+        <input id="s-pass" type="password" placeholder="e.g. alice-password">
+      </div>
+    </div>
+    <label class="lab">Salt</label>
+    <input id="s-salt" type="text" value="<?SALT?>">
+    <div class="btn-row">
+      <button class="btn" id="s-go">Generate hash</button>
+    </div>
+    <label class="lab" style="margin-top:18px">Hash (paste into accounts.json's <code>"h"</code> field)</label>
+    <div class="out empty" id="s-out">Waiting for input...</div>
+    <div class="btn-row">
+      <button class="btn ghost" id="s-copy">📋 Copy hash</button>
+    </div>
+  </div>
+</div>
+
+<!-- Verify -->
+<div class="panel" data-panel="verify">
+  <div class="card">
+    <div class="warn" style="background:#fffbea;border-color:#b8923f;color:#8a7040">
+      <span>💡</span>
+      <div>
+        Workflow: after you've sent a customer their <code>username:password</code>, if you suspect the hash won't match, paste the <b>plaintext password</b> + the <b>hash value</b> from <code>accounts.json</code> to verify.
+        Match = true = the customer can log in; mismatch = check for typos.
+      </div>
+    </div>
+
+    <label class="lab">Salt</label>
+    <input id="v-salt" type="text" value="<?SALT?>">
+
+    <div class="row" style="margin-top:14px">
+      <div>
+        <label class="lab">Plaintext password</label>
+        <input id="v-pass" type="text" placeholder="e.g. demo1234">
+      </div>
+      <div>
+        <label class="lab">Expected hash <span class="hint">64-char SHA-256 lowercase hex</span></label>
+        <input id="v-hash" type="text" placeholder="e.g. 1e3471c5b2851c55...">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" id="v-go">Verify</button>
+    </div>
+
+    <div class="out empty" id="v-out" style="margin-top:14px">Click "Verify" to see the result here...</div>
+  </div>
+</div>
+
+<!-- Parse -->
+<div class="panel" data-panel="parse">
+  <div class="card">
+    <div class="warn" style="background:var(--teal-l);border-color:var(--teal);color:var(--teal)">
+      <span>📋</span>
+      <div>
+        Paste your current <code>accounts.json</code> content here — the tool will extract per-account metadata (username + hash-length validation).
+        Plaintext passwords are NOT shown (because they were never stored).<br>
+        <span style="font-size:12px;color:var(--ink3)"><?ACCOUNT_SCHEMA_NOTE?></span>
+      </div>
+    </div>
+
+    <label class="lab">accounts.json content</label>
+    <textarea id="p-input" placeholder='{
+  "version": 1,
+  "salt": "<?SALT?>",
+  "accounts": [
+    { "u": "alice", "h": "<64-char-hex>" }
+  ]
+}'></textarea>
+
+    <div class="btn-row">
+      <button class="btn" id="p-go">Parse</button>
+    </div>
+
+    <div class="out empty" id="p-out" style="margin-top:14px">Waiting for paste...</div>
+  </div>
+</div>
+
+<div class="foot">
+  <b>How to use:</b><br>
+  1. Customer pays <span id="foot-price"><?DEFAULT_PRICE?></span> → contact <?OWNER_ROLE?> at <b id="foot-wx"><?OWNER_WECHAT?></b><br>
+  2. Open this page → "Batch generate" tab → enter <code>username:password</code> (one per line)<br>
+  3. Click "Generate full accounts.json" → copy the JSON → overwrite <?APP_DOMAIN_HINT?>/accounts.json<br>
+  4. DM the customer their <b>username + password</b> (plaintext, not the hash)<br>
+  5. Customer can't log in? → "Verify" tab → re-enter the customer's password + the hash from accounts.json → confirm match<br>
+  <br>
+  Tool properties: pure-frontend SHA-256 · works offline · uploads nothing · salt must match the main app<br>
+  Open main app: <a href="<?INDEX_LINK?>" target="_blank"><?INDEX_LINK?></a>
+</div>
+
+<script>
+/* ════════════════════════════════════════
+   ⚙️ Price + WeChat ID read from meta, mirror to localStorage, sync to other tabs (BroadcastChannel + storage)
+   ════════════════════════════════════════ */
+(function initCfg(){
+  const LS_KEY = '<?APP_KEY?>_cfg';
+  const metaPrice = (document.querySelector('meta[name="x-<?APP_KEY?>-price"]')||{}).content || '<?DEFAULT_PRICE?>';
+  const metaWx = (document.querySelector('meta[name="x-<?APP_KEY?>-wx"]')||{}).content || '<?OWNER_WECHAT?>';
+  let cfg;
+  try {
+    cfg = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+  } catch(_e) { cfg = null; }
+  cfg = cfg || {price: metaPrice, wx: metaWx};
+
+  const priceEl = document.getElementById('foot-price');
+  const wxEl = document.getElementById('foot-wx');
+  if (priceEl) priceEl.textContent = cfg.price;
+  if (wxEl) wxEl.textContent = cfg.wx || '(not configured)';
+
+  function sync() {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(cfg));
+      if (typeof BroadcastChannel !== 'undefined') {
+        new BroadcastChannel('<?APP_KEY?>_admin').postMessage({type:'cfg-update', ...cfg});
+      }
+    } catch(_e) {}
+  }
+  // Main app subscribes via subscribeCfg() (see SKILL.md §3)
+  window.addEventListener('storage', e => {
+    if (e.key === LS_KEY && e.newValue) {
+      try {
+        const c = JSON.parse(e.newValue);
+        if (priceEl) priceEl.textContent = c.price;
+        if (wxEl) wxEl.textContent = c.wx || '(not configured)';
+      } catch(_e) {}
+    }
+  });
+  sync();
+})();
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+$$('.tab').forEach(t => t.onclick = () => {
+  $$('.tab').forEach(x => x.classList.remove('on'));
+  $$('.panel').forEach(x => x.classList.remove('on'));
+  t.classList.add('on');
+  $(`[data-panel="${t.dataset.tab}"]`).classList.add('on');
+});
+
+async function sha256(s){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2,'0')).join('');
+}
+
+/* ── Batch generate ── */
+$('#b-gen').onclick = async () => {
+  const salt = $('#b-salt').value.trim();
+  const version = parseInt($('#b-version').value.trim() || '1', 10);
+  const raw = $('#b-input').value.trim();
+  const out = $('#b-out');
+  if (!salt) { out.className='out'; out.textContent='❌ Salt is required'; return; }
+  if (!raw) { out.className='out'; out.textContent='❌ Account list is required'; return; }
+
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+  const accounts = [];
+  const errors = [];
+  for (const [i, line] of lines.entries()) {
+    const idx = line.indexOf(':');
+    if (idx < 0) { errors.push(`Line ${i+1} malformed: ${line}`); continue; }
+    const u = line.slice(0, idx).trim();
+    const p = line.slice(idx+1).trim();
+    if (!u || !p) { errors.push(`Line ${i+1} has empty username or password`); continue; }
+    const h = await sha256(salt + p);
+    accounts.push({ u, h });
+  }
+  const json = JSON.stringify({ version, salt, accounts }, null, 2);
+  out.className = 'out';
+  out.textContent = json + (errors.length ? '\n\n⚠️ Warnings:\n' + errors.join('\n') : '');
+};
+
+$('#b-copy').onclick = () => {
+  const text = $('#b-out').textContent;
+  if (!text || $('#b-out').classList.contains('empty')) return;
+  navigator.clipboard.writeText(text).then(() => {
+    $('#b-copy').textContent = '✓ Copied';
+    setTimeout(() => $('#b-copy').textContent = '📋 Copy JSON', 1500);
+  });
+};
+
+$('#b-download').onclick = () => {
+  const text = $('#b-out').textContent;
+  if (!text || $('#b-out').classList.contains('empty')) return;
+  const blob = new Blob([text], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'accounts.json'; a.click();
+  URL.revokeObjectURL(url);
+};
+
+$('#b-clear').onclick = () => {
+  $('#b-input').value = '';
+  $('#b-out').className = 'out empty';
+  $('#b-out').textContent = 'Click "Generate" to see the full JSON here...';
+};
+
+/* ── Auto-generate ── */
+const PW_WORDS = ['river','moon','pine','cloud','wind','stone','valley','thunder','sunset','autumn',
+                  'forest','meadow','silver','ocean','ember','willow','breeze','shadow','harbor','frost'];
+function rand4() { return Math.floor(Math.random() * 9000 + 1000); }
+function todayStamp() {
+  const d = new Date();
+  return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('');
+}
+function genPassword() {
+  const a = PW_WORDS[Math.floor(Math.random() * PW_WORDS.length)];
+  const b = PW_WORDS[Math.floor(Math.random() * PW_WORDS.length)];
+  return a + '-' + b + rand4().toString().slice(0,2);
+}
+function genUsername() {
+  return 'user' + todayStamp() + String(rand4()).slice(0,2);
+}
+const LS_PLAIN = '<?APP_KEY?>_accounts_plain';
+function loadPlain() { try { return JSON.parse(localStorage.getItem(LS_PLAIN) || '[]'); } catch(_e) { return []; } }
+function savePlain(arr) { try { localStorage.setItem(LS_PLAIN, JSON.stringify(arr)); } catch(_e) {} }
+
+$('#a-gen').onclick = () => {
+  const n = Math.min(20, Math.max(1, parseInt($('#a-count').value, 10) || 1));
+  const existing = loadPlain();
+  for (let i = 0; i < n; i++) {
+    const u = genUsername();
+    const p = genPassword();
+    existing.push({u, p});
+  }
+  savePlain(existing);
+  $('#a-plain').value = existing.map(x => `${x.u}  ${x.p}`).join('\n');
+};
+
+$('#a-clear-plain').onclick = () => {
+  if (confirm('Clear the local plaintext list?\n(Only clears localStorage; does NOT touch accounts.json)')) {
+    localStorage.removeItem(LS_PLAIN);
+    $('#a-plain').value = '';
+  }
+};
+
+$('#a-copy-plain').onclick = () => {
+  const text = $('#a-plain').value;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    $('#a-copy-plain').textContent = '✓ Copied';
+    setTimeout(() => $('#a-copy-plain').textContent = '📋 Copy plaintext', 1500);
+  });
+};
+
+$('#a-download-plain').onclick = () => {
+  const text = $('#a-plain').value;
+  if (!text) return;
+  const stamp = todayStamp();
+  const blob = new Blob([text], {type: 'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `<?APP_KEY?>-accounts-${stamp}.txt`; a.click();
+  URL.revokeObjectURL(url);
+};
+
+function parsePlainTextarea(text) {
+  return text.split('\n').map(l => l.trim()).filter(l => l && !l.match(/^[#\/／]/))
+    .map(l => {
+      const m = l.match(/^(\S+)\s+(\S+)$/);
+      return m ? {u: m[1], p: m[2]} : null;
+    }).filter(Boolean);
+}
+
+async function syncPlainToJson() {
+  const salt = $('#a-salt').value.trim();
+  const pairs = parsePlainTextarea($('#a-plain').value);
+  if (!salt) { alert('Salt is required'); return; }
+  const accounts = [];
+  for (const {u, p} of pairs) {
+    accounts.push({u, h: await sha256(salt + p)});
+  }
+  let existing = [];
+  try { existing = (JSON.parse($('#a-existing').value || '{}').accounts || []); }
+  catch(_e) {}
+  const dedup = new Map();
+  [...existing, ...accounts].forEach(a => dedup.set(a.u, a));
+  const json = JSON.stringify({version: 1, salt, accounts: [...dedup.values()]}, null, 2);
+  const out = $('#a-json');
+  out.className = 'out';
+  out.textContent = json;
+}
+
+$('#a-append').onclick = syncPlainToJson;
+
+$('#a-load-file').onclick = () => document.getElementById('a-file-input').click();
+$('#a-file-input').onchange = (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const j = JSON.parse(ev.target.result);
+      document.getElementById('a-existing').value = JSON.stringify(j, null, 2);
+      const status = document.getElementById('a-existing-status');
+      status.textContent = '✓ Loaded from file ('+((j.accounts||[]).length)+' accounts)';
+      status.style.color = 'var(--teal)';
+    } catch(err) { alert('File is not valid JSON: '+err.message); }
+  };
+  reader.readAsText(file);
+};
+
+/* ── Single hash ── */
+$('#s-go').onclick = async () => {
+  const u = $('#s-user').value.trim();
+  const p = $('#s-pass').value;
+  const salt = $('#s-salt').value.trim();
+  const out = $('#s-out');
+  if (!u || !p || !salt) { out.className='out'; out.textContent='❌ Username, password and salt are all required'; return; }
+  const h = await sha256(salt + p);
+  out.className='out';
+  out.textContent = JSON.stringify({u, h}, null, 2);
+};
+
+$('#s-copy').onclick = () => {
+  const text = $('#s-out').textContent;
+  if (!text || $('#s-out').classList.contains('empty')) return;
+  navigator.clipboard.writeText(text).then(() => {
+    $('#s-copy').textContent = '✓ Copied';
+    setTimeout(() => $('#s-copy').textContent = '📋 Copy hash', 1500);
+  });
+};
+
+/* ── Verify ── */
+$('#v-go').onclick = async () => {
+  const salt = $('#v-salt').value.trim();
+  const pass = $('#v-pass').value;
+  const expected = $('#v-hash').value.trim().toLowerCase();
+  const out = $('#v-out');
+  if (!salt || !pass || !expected) { out.className='out'; out.textContent='❌ Salt, plaintext and hash are all required'; return; }
+  const actual = await sha256(salt + pass);
+  const ok = actual === expected;
+  out.className='out';
+  out.textContent = JSON.stringify({ match: ok, actual, expected, length_ok: expected.length === 64 }, null, 2);
+};
+
+/* ── Parse ── */
+$('#p-go').onclick = () => {
+  const raw = $('#p-input').value.trim();
+  const out = $('#p-out');
+  if (!raw) { out.className='out'; out.textContent='❌ Paste JSON first'; return; }
+  try {
+    const j = JSON.parse(raw);
+    const rows = (j.accounts || []).map(a => {
+      const lenOk = (a.h || '').length === 64;
+      return { u: a.u, h_len: (a.h || '').length, h_ok: lenOk, paidUntil: a.paidUntil || null, role: a.role || null };
+    });
+    out.className='out';
+    out.textContent = JSON.stringify({salt: j.salt, version: j.version, account_count: rows.length, accounts: rows}, null, 2);
+  } catch(err) {
+    out.className='out';
+    out.textContent = '❌ JSON parse failed: ' + err.message;
+  }
+};
+
+/* ════════════════════════════════════════
+   Auto-fetch existing accounts.json (skip on file://; meta + same-origin preferred)
+   ════════════════════════════════════════ */
+var ACCOUNT_URL = (function(){
+  try {
+    var u = new URL(location.href).searchParams.get('accountUrl');
+    if (u) return u.trim();
+  } catch(_e) {}
+  var meta = ((document.querySelector('meta[name="x-account-url"]')||{}).content || '').trim();
+  if (meta) {
+    try {
+      var m = new URL(meta, location.href);
+      if (m.origin === location.origin) return m.href;
+      return location.origin + '/accounts.json';
+    } catch(_e) {
+      return location.origin + '/accounts.json';
+    }
+  }
+  return location.origin + '/accounts.json';
+})();
+
+function loadExistingJson(opts){
+  opts = opts || {};
+  var ta = document.getElementById('a-existing');
+  var status = document.getElementById('a-existing-status');
+  if (!ta) return;
+  if (location.protocol === 'file:' && !opts.manual) {
+    ta.value = '';
+    status.innerHTML = 'Auto-fetch is disabled on file:// pages. Use "Load from local file" or paste JSON manually (or click "Re-fetch" to force a try).';
+    return;
+  }
+  status.textContent = 'Fetching from ' + ACCOUNT_URL + '…';
+  fetch(ACCOUNT_URL, {cache: 'no-store'}).then(r => {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(j => {
+    ta.value = JSON.stringify(j, null, 2);
+    var count = (j.accounts || []).length;
+    status.innerHTML = '✓ Auto-loaded (' + count + ' accounts) · ' + ACCOUNT_URL;
+    status.style.color = 'var(--teal)';
+  }).catch(err => {
+    ta.value = '';
+    var hint = (err && /fetch|network|cors/i.test(err.message))
+      ? '<br><small>· Likely missing CORS header on remote accounts.json</small>' : '';
+    status.innerHTML = '⚠️ Auto-load failed: ' + (err && err.message || err) + ' (<b>Click "Load from local file"</b> or paste manually)' + hint;
+    status.style.color = 'var(--cinnabar)';
+  });
+}
+loadExistingJson();
+$('#a-refresh').onclick = () => loadExistingJson({manual: true});
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "salt": "<?SALT?>",
+  "accounts": [
+    {
+      "u": "alice",
+      "h": "<64-char lowercase hex sha256(salt + 'alice-password')>"
+    },
+    {
+      "u": "bob",
+      "h": "<64-char lowercase hex sha256(salt + 'bob-password')>"
+    },
+    {
+      "u": "<?ADMIN_USER?>",
+      "h": "<64-char lowercase hex sha256(salt + '<?ADMIN_PASSWORD>')>",
+      "role": "admin",
+      "paidUntil": "2099-12-31"
+    }
+  ]
+}

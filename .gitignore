@@ -1,0 +1,20 @@
+# Node (default if you ever wire Node Functions for /api/login etc.)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp/
+.pnp.js
+coverage/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Anything users might generate at runtime
+.env
+.env.local
+accounts.json          # the real file lives in the user's repo root; keep out of THIS skill's git

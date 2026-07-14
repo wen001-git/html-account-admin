@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<!--
+  <?APP_NAME?> · Account Admin Tool
+  仅 <?OWNER_ROLE?> 本人使用；输入用户名+明文密码 → 生成 accounts.json 哈希。
+  纯前端 SHA-256；可按 x-account-url 自动拉取 accounts.json，失败时仍可手动粘贴。
+
+  ──────────────────────────────
+  替换规则（部署到新项目时）：
+    <?APP_NAME?>           → 你的产品显示名（如 "WhiteBoard Pro"）
+    <?APP_KEY?>            → 短 key 名（如 "whiteboard"，决定 LS key / BC channel name）
+    <?APP_DOMAIN_HINT?>    → 主 app 域名（用于"打开主 app"按钮）
+    <?SALT?>               → 自定义 salt 字符串，长度 ≥ 16（与 accounts.json 的 salt 字段一致）
+    <?DEFAULT_PRICE?>      → 价格字符串（如 "$5"、"¥29.9"）
+    <?OWNER_WECHAT?>       → 收款微信号（如 "yourname2026"）
+    <?OWNER_ROLE?>         → 管理员身份描述（如 "作者"、"管理员"）
+    <?FAVICON?>            → favicon URL 或 data URL（可留空）
+    <?READMETAIL_NOTE?>    → 底部 accounts.json 部署路径说明（每项目路径不同）
+    <?INDEX_LINK?>         → "打开主 app" 跳转 URL
+    <?ACCOUNT_SCHEMA_NOTE?>→ 会员时长字段说明（可视项目实际改写）
+    <?OG_META?>            → og:title / og:description（社交分享用，可省）
+
+  替换完后用：grep -nE '<\?[A-Z_]+\?>' <file> 验证 0 残留。
+  ──────────────────────────────
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- 优先 <?APP_DOMAIN_HINT?>；本地调试可改成 http://127.0.0.1:8000/accounts.json 或留空让用户手动加载 -->
+<meta name="x-account-url" content="https://<?APP_DOMAIN_HINT?>/accounts.json">
+<meta name="x-<?APP_KEY?>-price" content="<?DEFAULT_PRICE?>">
+<meta name="x-<?APP_KEY?>-wx" content="<?OWNER_WECHAT?>">
+<title>账号管理 · <?APP_NAME?></title>
+<?FAVICON?>
+<?OG_META?>
+<style>
+:root{
+  --ink:#1c1c1e;--ink2:#5c5c6e;--ink3:#9a9aaa;
+  --paper:#f7f5f0;--paper2:#efece4;--paper3:#e8e5dc;
+  --teal:#2d5a6b;--teal-l:#e4ecef;
+  --border:#d8d4c8;--border2:#c8c2b2;
+  --cinnabar:#b23a2e;--cinnabar-l:#f7e8e4;
+  --shadow:0 2px 12px rgba(28,28,30,.08);
+  --r:10px;
+  --serif:"STKaiti","KaiTi","楷体",serif;
+  --sans:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--sans);background:var(--paper);color:var(--ink);line-height:1.7;padding:24px 18px;max-width:980px;margin:0 auto}
+h1{font-family:var(--serif);font-size:28px;font-weight:700;letter-spacing:.1em;margin-bottom:6px}
+.sub{color:var(--ink2);font-size:13px;margin-bottom:24px}
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--border);margin-bottom:20px;flex-wrap:wrap}
+.tab{padding:10px 18px;border:none;background:transparent;font:inherit;color:var(--ink2);cursor:pointer;border-bottom:2px solid transparent;transition:.18s}
+.tab.on{color:var(--teal);border-bottom-color:var(--teal);font-weight:600}
+.tab:hover{color:var(--ink)}
+.panel{display:none;animation:fade .25s}
+.panel.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.card{background:var(--paper2);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--shadow)}
+.lab{display:block;font-size:13px;color:var(--ink2);margin-bottom:6px;font-weight:500}
+.lab .hint{color:var(--ink3);font-weight:normal;font-size:11px;margin-left:6px}
+textarea,input[type=text],input[type=password]{
+  font-family:ui-monospace,"SF Mono",Consolas,monospace;font-size:13px;
+  padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;
+  color:var(--ink);outline:none;width:100%;resize:vertical
+}
+textarea:focus,input:focus{border-color:var(--teal)}
+textarea{height:120px;line-height:1.5}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
+@media(max-width:600px){.row{grid-template-columns:1fr}}
+.btn{padding:10px 18px;background:var(--teal);color:#fff;border:none;border-radius:8px;font:inherit;cursor:pointer;font-weight:600;transition:.18s}
+.btn:hover{opacity:.85}
+.btn.ghost{background:transparent;color:var(--ink2);border:1px solid var(--border)}
+.btn.ghost:hover{color:var(--ink);border-color:var(--teal)}
+.btn.cinnabar{background:var(--cinnabar)}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.out{font-family:ui-monospace,"SF Mono",Consolas,monospace;font-size:12px;
+  background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px;
+  white-space:pre-wrap;word-break:break-all;min-height:48px;max-height:300px;overflow:auto;line-height:1.5}
+.out.empty{color:var(--ink3);font-style:italic;font-family:var(--sans)}
+.warn{background:var(--cinnabar-l);border:1px solid var(--cinnabar);color:var(--cinnabar);padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;display:flex;gap:8px;align-items:flex-start}
+.warn b{font-weight:700}
+.foot{margin-top:30px;padding-top:18px;border-top:1px solid var(--border);color:var(--ink3);font-size:12px;line-height:1.6}
+.foot kbd{background:var(--paper3);padding:1px 6px;border-radius:4px;font-family:ui-monospace,monospace;font-size:11px}
+</style>
+</head>
+<body>
+
+<h1>账号管理 · <span style="color:var(--cinnabar)"><?APP_NAME?></span></h1>
+<div class="sub">仅 <?OWNER_ROLE?> 使用 · 离线工具 · 生成 SHA-256 哈希用于 accounts.json</div>
+
+<div class="warn">
+  <span>🔒</span>
+  <div>
+    <b>重要提示 + 「零信任客户端」声明：</b>
+    本工具只生成<b>哈希</b>（单向不可逆）。SHA-256 设计上就<b>不能</b>从哈希反推回明文密码。<br>
+    发给用户的应该是<b>明文用户名 + 密码</b>，不是哈希。<br>
+    <b style="color:var(--cinnabar)">客户端校验可被绕过：</b>本方案依赖 <code>localStorage.unlocked=true</code>，任何持有浏览器 dev tools 的人都能改 ——
+    本工具用于<b>软门 / 付费墙</b>，<b>不替代真鉴权</b>（真鉴权请加 Node Functions 后端，见 SKILL.md 第五节）。
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab on" data-tab="batch">批量生成</button>
+  <button class="tab" data-tab="auto">🎲 自动生成</button>
+  <button class="tab" data-tab="single">单条哈希</button>
+  <button class="tab" data-tab="verify">验证</button>
+  <button class="tab" data-tab="parse">从 JSON 提取</button>
+</div>
+
+<!-- 批量生成 -->
+<div class="panel on" data-panel="batch">
+  <div class="card">
+    <div class="row">
+      <div>
+        <label class="lab">盐值 <span class="hint">与主 app 一致；accounts.json 的 salt 字段</span></label>
+        <input id="b-salt" type="text" value="<?SALT?>">
+      </div>
+      <div>
+        <label class="lab">schema 版本 <span class="hint">默认 1</span></label>
+        <input id="b-version" type="text" value="1">
+      </div>
+    </div>
+
+    <label class="lab" style="margin-top:14px">账号清单 <span class="hint">每行一个，格式：用户名:密码（冒号分隔）</span></label>
+    <textarea id="b-input" placeholder="alice:alice-password
+bob:bob-password
+admin:admin-password"></textarea>
+
+    <div class="btn-row">
+      <button class="btn" id="b-gen">🔨 生成完整 accounts.json</button>
+      <button class="btn ghost" id="b-clear">清空</button>
+    </div>
+
+    <label class="lab" style="margin-top:18px">输出（直接覆盖到 <?APP_DOMAIN_HINT?>/accounts.json）</label>
+    <div class="out empty" id="b-out">点击「生成」后这里会显示完整 JSON...</div>
+    <div class="btn-row">
+      <button class="btn ghost" id="b-copy">📋 复制 JSON</button>
+      <button class="btn ghost" id="b-download">⬇ 下载 accounts.json</button>
+    </div>
+  </div>
+</div>
+
+<!-- 自动生成（批量生成密码） -->
+<div class="panel" data-panel="auto">
+  <div class="card">
+    <div class="warn" style="background:var(--teal-l);border-color:var(--teal);color:var(--teal)">
+      <span>🎲</span>
+      <div>
+        <b>一键生成新账号</b>——工具自动生成<b>随机密码</b>（如 青云·明月·2026）和<b>用户名</b>（如 user<?echo date('Ymd')?>01）。
+        自动计算哈希，自动追加到现有 JSON。<br>
+        工作流：① 设置数量 ② 点击「生成」 ③ 复制 JSON 到服务器 ④ 把明文账号私聊发给客户。
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label class="lab">生成数量 <span class="hint">1–20</span></label>
+        <input id="a-count" type="text" value="3">
+      </div>
+      <div>
+        <label class="lab">盐值</label>
+        <input id="a-salt" type="text" value="<?SALT?>">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" id="a-gen">🎲 生成账号</button>
+      <button class="btn ghost" id="a-clear-plain">清空明文清单</button>
+    </div>
+
+    <label class="lab" style="margin-top:18px">明文账号清单（可手动编辑）</label>
+    <textarea id="a-plain" placeholder="点击「🎲 生成账号」自动填充。
+也可手动编辑：每行「用户名  密码」（中间隔 2 个空格）。
+例：
+user202607101  qingzhao
+user202607102  mingyue"></textarea>
+    <div class="btn-row">
+      <button class="btn ghost" id="a-copy-plain">📋 复制明文</button>
+      <button class="btn ghost" id="a-download-plain">⬇ 下载 accounts-明文.txt</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <label class="lab">📋 现有 accounts.json <span class="hint" id="a-existing-status">等待自动拉取…</span></label>
+    <textarea id="a-existing" placeholder='{
+  "version": 1,
+  "salt": "<?SALT?>",
+  "accounts": [
+    { "u": "alice", "h": "<64-char-hex>" }
+  ]
+}'></textarea>
+
+    <div class="btn-row">
+      <button class="btn cinnabar" id="a-append">🔗 追加到现有 JSON</button>
+      <button class="btn ghost" id="a-load-file">📁 从本地文件加载</button>
+      <input type="file" id="a-file-input" accept=".json,application/json" style="display:none">
+      <button class="btn ghost" id="a-refresh">🔄 重新拉取</button>
+    </div>
+
+    <label class="lab" style="margin-top:18px">输出（追加后的完整 JSON）</label>
+    <div class="out empty" id="a-json">先点「🎲 生成账号」再点「🔗 追加到现有 JSON」...</div>
+    <div class="btn-row">
+      <button class="btn ghost" id="a-copy-json">📋 复制 JSON</button>
+      <button class="btn ghost" id="a-download-json">⬇ 下载 accounts.json</button>
+    </div>
+
+    <div style="margin-top:12px;padding:10px 14px;background:var(--paper3);border-left:3px solid var(--teal);border-radius:6px;font-size:12px;color:var(--ink2);line-height:1.6">
+      <b style="color:var(--teal)">⬆ 部署到服务器：</b><?READMETAIL_NOTE?>
+    </div>
+  </div>
+</div>
+
+<!-- 单条 -->
+<div class="panel" data-panel="single">
+  <div class="card">
+    <div class="row">
+      <div>
+        <label class="lab">用户名</label>
+        <input id="s-user" type="text" placeholder="如 alice">
+      </div>
+      <div>
+        <label class="lab">明文密码</label>
+        <input id="s-pass" type="password" placeholder="如 alice-password">
+      </div>
+    </div>
+    <label class="lab">盐值</label>
+    <input id="s-salt" type="text" value="<?SALT?>">
+    <div class="btn-row">
+      <button class="btn" id="s-go">生成哈希</button>
+    </div>
+    <label class="lab" style="margin-top:18px">哈希值（粘贴到 accounts.json 的 "h" 字段）</label>
+    <div class="out empty" id="s-out">等待输入...</div>
+    <div class="btn-row">
+      <button class="btn ghost" id="s-copy">📋 复制哈希</button>
+    </div>
+  </div>
+</div>
+
+<!-- 验证 -->
+<div class="panel" data-panel="verify">
+  <div class="card">
+    <div class="warn" style="background:#fffbea;border-color:#b8923f;color:#8a7040">
+      <span>💡</span>
+      <div>
+        工作流：你给用户发了「用户名:密码」后，如果担心哈希对不上，把<b>明文密码 + accounts.json 里的哈希值</b>填进来验证。
+        匹配 = true = 用户能用这个账号登录；不匹配 = 检查是否打错字。
+      </div>
+    </div>
+
+    <label class="lab">盐值</label>
+    <input id="v-salt" type="text" value="<?SALT?>">
+
+    <div class="row" style="margin-top:14px">
+      <div>
+        <label class="lab">明文密码</label>
+        <input id="v-pass" type="text" placeholder="如 demo1234">
+      </div>
+      <div>
+        <label class="lab">哈希值 <span class="hint">64 位 SHA-256 小写 hex</span></label>
+        <input id="v-hash" type="text" placeholder="如 1e3471c5b2851c55...">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" id="v-go">验证</button>
+    </div>
+
+    <div class="out empty" id="v-out" style="margin-top:14px">点击「验证」后这里显示结果...</div>
+  </div>
+</div>
+
+<!-- 解析 -->
+<div class="panel" data-panel="parse">
+  <div class="card">
+    <div class="warn" style="background:var(--teal-l);border-color:var(--teal);color:var(--teal)">
+      <span>📋</span>
+      <div>
+        把当前 <code>accounts.json</code> 的内容贴进来，工具帮你解析出每个账号的元数据（用户名 + 哈希长度校验）。
+        不会显示明文密码（因为根本没存）。<br>
+        <span style="font-size:12px;color:var(--ink3)"><?ACCOUNT_SCHEMA_NOTE?></span>
+      </div>
+    </div>
+
+    <label class="lab">accounts.json 内容</label>
+    <textarea id="p-input" placeholder='{
+  "version": 1,
+  "salt": "<?SALT?>",
+  "accounts": [
+    { "u": "alice", "h": "<64-char-hex>" }
+  ]
+}'></textarea>
+
+    <div class="btn-row">
+      <button class="btn" id="p-go">解析</button>
+    </div>
+
+    <div class="out empty" id="p-out" style="margin-top:14px">等待粘贴...</div>
+  </div>
+</div>
+
+<div class="foot">
+  <b>使用流程：</b><br>
+  1. 客户付款 <span id="foot-price"><?DEFAULT_PRICE?></span> 元 → 加 <?OWNER_ROLE?>微信 <b id="foot-wx"><?OWNER_WECHAT?></b> 收款<br>
+  2. 打开本页面 → 「批量生成」标签 → 输入 <code>用户名:密码</code>（一行一个）<br>
+  3. 点击「生成完整 accounts.json」→ 复制 JSON → 覆盖到 <?APP_DOMAIN_HINT?>/accounts.json<br>
+  4. 把「用户名 + 密码」发给客户（<b>明文</b>，不是哈希）<br>
+  5. 客户登录失败？→「验证」标签 → 输入客户反馈的密码 + accounts.json 里的哈希 → 确认是否一致<br>
+  <br>
+  工具特性：纯前端 SHA-256 · 离线可用 · 不上传任何数据 · 盐值必须与主 app 一致<br>
+  打开主 app：<a href="<?INDEX_LINK?>" target="_blank"><?INDEX_LINK?></a>
+</div>
+
+<script>
+/* ════════════════════════════════════════
+   ⚙️ 价格 + 微信号从 meta 读取，存 localStorage，同源其他 tab 同步（BroadcastChannel + storage）
+   ════════════════════════════════════════ */
+(function initCfg(){
+  const LS_KEY = '<?APP_KEY?>_cfg';
+  const metaPrice = (document.querySelector('meta[name="x-<?APP_KEY?>-price"]')||{}).content || '<?DEFAULT_PRICE?>';
+  const metaWx = (document.querySelector('meta[name="x-<?APP_KEY?>-wx"]')||{}).content || '<?OWNER_WECHAT?>';
+  let cfg;
+  try {
+    cfg = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+  } catch(_e) { cfg = null; }
+  cfg = cfg || {price: metaPrice, wx: metaWx};
+
+  const priceEl = document.getElementById('foot-price');
+  const wxEl = document.getElementById('foot-wx');
+  if (priceEl) priceEl.textContent = cfg.price;
+  if (wxEl) wxEl.textContent = cfg.wx || '(未配置)';
+
+  function sync() {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(cfg));
+      if (typeof BroadcastChannel !== 'undefined') {
+        new BroadcastChannel('<?APP_KEY?>_admin').postMessage({type:'cfg-update', ...cfg});
+      }
+    } catch(_e) {}
+  }
+  // 主 app 用 subscribeCfg() 订阅本事件（见 SKILL.md 第三节）
+  window.addEventListener('storage', e => {
+    if (e.key === LS_KEY && e.newValue) {
+      try {
+        const c = JSON.parse(e.newValue);
+        if (priceEl) priceEl.textContent = c.price;
+        if (wxEl) wxEl.textContent = c.wx || '(未配置)';
+      } catch(_e) {}
+    }
+  });
+  sync();
+})();
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+$$('.tab').forEach(t => t.onclick = () => {
+  $$('.tab').forEach(x => x.classList.remove('on'));
+  $$('.panel').forEach(x => x.classList.remove('on'));
+  t.classList.add('on');
+  $(`[data-panel="${t.dataset.tab}"]`).classList.add('on');
+});
+
+async function sha256(s){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2,'0')).join('');
+}
+
+/* ── 批量生成 ── */
+$('#b-gen').onclick = async () => {
+  const salt = $('#b-salt').value.trim();
+  const version = parseInt($('#b-version').value.trim() || '1', 10);
+  const raw = $('#b-input').value.trim();
+  const out = $('#b-out');
+  if (!salt) { out.className='out'; out.textContent='❌ 请填写盐值'; return; }
+  if (!raw) { out.className='out'; out.textContent='❌ 请填写账号清单'; return; }
+
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+  const accounts = [];
+  const errors = [];
+  for (const [i, line] of lines.entries()) {
+    const idx = line.indexOf(':');
+    if (idx < 0) { errors.push(`第 ${i+1} 行格式错：${line}`); continue; }
+    const u = line.slice(0, idx).trim();
+    const p = line.slice(idx+1).trim();
+    if (!u || !p) { errors.push(`第 ${i+1} 行用户名或密码为空`); continue; }
+    const h = await sha256(salt + p);
+    accounts.push({ u, h });
+  }
+  const json = JSON.stringify({ version, salt, accounts }, null, 2);
+  out.className = 'out';
+  out.textContent = json + (errors.length ? '\n\n⚠️ 警告：\n' + errors.join('\n') : '');
+};
+
+$('#b-copy').onclick = () => {
+  const text = $('#b-out').textContent;
+  if (!text || $('#b-out').classList.contains('empty')) return;
+  navigator.clipboard.writeText(text).then(() => {
+    $('#b-copy').textContent = '✓ 已复制';
+    setTimeout(() => $('#b-copy').textContent = '📋 复制 JSON', 1500);
+  });
+};
+
+$('#b-download').onclick = () => {
+  const text = $('#b-out').textContent;
+  if (!text || $('#b-out').classList.contains('empty')) return;
+  const blob = new Blob([text], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'accounts.json'; a.click();
+  URL.revokeObjectURL(url);
+};
+
+$('#b-clear').onclick = () => {
+  $('#b-input').value = '';
+  $('#b-out').className = 'out empty';
+  $('#b-out').textContent = '点击「生成」后这里会显示完整 JSON...';
+};
+
+/* ── 自动生成（生成用户名+密码） ── */
+const PW_WORDS = ['qingyun','mingyue','zihan','yuhe','tianhe','ruoxi','shuying','qingzhao','baiyun','mufeng',
+                  'xiaoyao','xiangyu','chenxi','lvyin','hanhai','xingyun','yunshuo','baimu','lanting','zhimo'];
+function rand4() { return Math.floor(Math.random() * 9000 + 1000); }
+function todayStamp() {
+  const d = new Date();
+  return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('');
+}
+function genPassword() {
+  const a = PW_WORDS[Math.floor(Math.random() * PW_WORDS.length)];
+  const b = PW_WORDS[Math.floor(Math.random() * PW_WORDS.length)];
+  return a + '·' + b + rand4().toString().slice(0,2);
+}
+function genUsername() {
+  return 'user' + todayStamp() + String(rand4()).slice(0,2);
+}
+const LS_PLAIN = '<?APP_KEY?>_accounts_plain';
+function loadPlain() { try { return JSON.parse(localStorage.getItem(LS_PLAIN) || '[]'); } catch(_e) { return []; } }
+function savePlain(arr) { try { localStorage.setItem(LS_PLAIN, JSON.stringify(arr)); } catch(_e) {} }
+
+$('#a-gen').onclick = () => {
+  const n = Math.min(20, Math.max(1, parseInt($('#a-count').value, 10) || 1));
+  const salt = $('#a-salt').value.trim();
+  const existing = loadPlain();
+  for (let i = 0; i < n; i++) {
+    const u = genUsername();
+    const p = genPassword();
+    existing.push({u, p});
+  }
+  savePlain(existing);
+  $('#a-plain').value = existing.map(x => `${x.u}  ${x.p}`).join('\n');
+};
+
+$('#a-clear-plain').onclick = () => {
+  if (confirm('确认清空本地明文清单？\n（仅清 localStorage，不影响 accounts.json）')) {
+    localStorage.removeItem(LS_PLAIN);
+    $('#a-plain').value = '';
+  }
+};
+
+$('#a-copy-plain').onclick = () => {
+  const text = $('#a-plain').value;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    $('#a-copy-plain').textContent = '✓ 已复制';
+    setTimeout(() => $('#a-copy-plain').textContent = '📋 复制明文', 1500);
+  });
+};
+
+$('#a-download-plain').onclick = () => {
+  const text = $('#a-plain').value;
+  if (!text) return;
+  const stamp = todayStamp();
+  const blob = new Blob([text], {type: 'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `<?APP_KEY?>-accounts-${stamp}.txt`; a.click();
+  URL.revokeObjectURL(url);
+};
+
+function parsePlainTextarea(text) {
+  return text.split('\n').map(l => l.trim()).filter(l => l && !l.match(/^[#\/／]/))
+    .map(l => {
+      const m = l.match(/^(\S+)\s+(\S+)$/);
+      return m ? {u: m[1], p: m[2]} : null;
+    }).filter(Boolean);
+}
+
+async function syncPlainToJson() {
+  const salt = $('#a-salt').value.trim();
+  const pairs = parsePlainTextarea($('#a-plain').value);
+  if (!salt) { alert('请填写盐值'); return; }
+  const accounts = [];
+  for (const {u, p} of pairs) {
+    accounts.push({u, h: await sha256(salt + p)});
+  }
+  let existing = [];
+  try { existing = (JSON.parse($('#a-existing').value || '{}').accounts || []); }
+  catch(_e) {}
+  const dedup = new Map();
+  [...existing, ...accounts].forEach(a => dedup.set(a.u, a));
+  const json = JSON.stringify({version: 1, salt, accounts: [...dedup.values()]}, null, 2);
+  const out = $('#a-json');
+  out.className = 'out';
+  out.textContent = json;
+}
+
+$('#a-append').onclick = syncPlainToJson;
+
+$('#a-load-file').onclick = () => document.getElementById('a-file-input').click();
+$('#a-file-input').onchange = (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const j = JSON.parse(ev.target.result);
+      document.getElementById('a-existing').value = JSON.stringify(j, null, 2);
+      const status = document.getElementById('a-existing-status');
+      status.textContent = '✓ 已从本地文件加载（'+((j.accounts||[]).length)+' 个账号）';
+      status.style.color = 'var(--teal)';
+    } catch(err) { alert('文件不是有效 JSON：'+err.message); }
+  };
+  reader.readAsText(file);
+};
+
+/* ── 单条哈希 ── */
+$('#s-go').onclick = async () => {
+  const u = $('#s-user').value.trim();
+  const p = $('#s-pass').value;
+  const salt = $('#s-salt').value.trim();
+  const out = $('#s-out');
+  if (!u || !p || !salt) { out.className='out'; out.textContent='❌ 用户名/密码/盐值都要填'; return; }
+  const h = await sha256(salt + p);
+  out.className='out';
+  out.textContent = JSON.stringify({u, h}, null, 2);
+};
+
+$('#s-copy').onclick = () => {
+  const text = $('#s-out').textContent;
+  if (!text || $('#s-out').classList.contains('empty')) return;
+  navigator.clipboard.writeText(text).then(() => {
+    $('#s-copy').textContent = '✓ 已复制';
+    setTimeout(() => $('#s-copy').textContent = '📋 复制哈希', 1500);
+  });
+};
+
+/* ── 验证 ── */
+$('#v-go').onclick = async () => {
+  const salt = $('#v-salt').value.trim();
+  const pass = $('#v-pass').value;
+  const expected = $('#v-hash').value.trim().toLowerCase();
+  const out = $('#v-out');
+  if (!salt || !pass || !expected) { out.className='out'; out.textContent='❌ 盐值/明文/哈希都要填'; return; }
+  const actual = await sha256(salt + pass);
+  const ok = actual === expected;
+  out.className='out';
+  out.textContent = JSON.stringify({ match: ok, actual, expected, length_ok: expected.length === 64 }, null, 2);
+};
+
+/* ── 解析 ── */
+$('#p-go').onclick = () => {
+  const raw = $('#p-input').value.trim();
+  const out = $('#p-out');
+  if (!raw) { out.className='out'; out.textContent='❌ 请粘贴 JSON'; return; }
+  try {
+    const j = JSON.parse(raw);
+    const rows = (j.accounts || []).map(a => {
+      const lenOk = (a.h || '').length === 64;
+      return { u: a.u, h_len: (a.h || '').length, h_ok: lenOk, paidUntil: a.paidUntil || null, role: a.role || null };
+    });
+    out.className='out';
+    out.textContent = JSON.stringify({salt: j.salt, version: j.version, account_count: rows.length, accounts: rows}, null, 2);
+  } catch(err) {
+    out.className='out';
+    out.textContent = '❌ JSON 解析失败：' + err.message;
+  }
+};
+
+/* ════════════════════════════════════════
+   自动拉取现有 accounts.json（file:// 跳过，meta + 同源优先）
+   ════════════════════════════════════════ */
+var ACCOUNT_URL = (function(){
+  try {
+    var u = new URL(location.href).searchParams.get('accountUrl');
+    if (u) return u.trim();
+  } catch(_e) {}
+  var meta = ((document.querySelector('meta[name="x-account-url"]')||{}).content || '').trim();
+  if (meta) {
+    try {
+      var m = new URL(meta, location.href);
+      if (m.origin === location.origin) return m.href;
+      return location.origin + '/accounts.json';
+    } catch(_e) {
+      return location.origin + '/accounts.json';
+    }
+  }
+  return location.origin + '/accounts.json';
+})();
+
+function loadExistingJson(opts){
+  opts = opts || {};
+  var ta = document.getElementById('a-existing');
+  var status = document.getElementById('a-existing-status');
+  if (!ta) return;
+  if (location.protocol === 'file:' && !opts.manual) {
+    ta.value = '';
+    status.innerHTML = '本地 file:// 页面不自动拉取，可点击「📁 从本地文件加载」或手动粘贴（点「🔄 重新拉取」可强制尝试）';
+    return;
+  }
+  status.textContent = '正在从 ' + ACCOUNT_URL + ' 拉取…';
+  fetch(ACCOUNT_URL, {cache: 'no-store'}).then(r => {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(j => {
+    ta.value = JSON.stringify(j, null, 2);
+    var count = (j.accounts || []).length;
+    status.innerHTML = '✓ 已自动加载（' + count + ' 个账号）· ' + ACCOUNT_URL;
+    status.style.color = 'var(--teal)';
+  }).catch(err => {
+    ta.value = '';
+    var hint = (err && /fetch|network|cors/i.test(err.message))
+      ? '<br><small>· 多半是远端 <code>accounts.json</code> 没配 CORS 响应头</small>' : '';
+    status.innerHTML = '⚠️ 自动加载失败：' + (err && err.message || err) + '（<b>点击「📁 从本地文件加载」</b>或手动粘贴）' + hint;
+    status.style.color = 'var(--cinnabar)';
+  });
+}
+loadExistingJson();
+$('#a-refresh').onclick = () => loadExistingJson({manual: true});
+</script>
+</body>
+</html>
